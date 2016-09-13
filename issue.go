@@ -227,7 +227,7 @@ using these data structures:
 If asked for a specific issue, the output is an Issue with Comments.
 Otherwise, the result is an array of Issues without Comments.
 */
-package main // import "rsc.io/github/issue"
+package main // import "sevki.org/pulls"
 
 import (
 	"bytes"
@@ -355,16 +355,16 @@ func showIssue(w io.Writer, n int) (*github.Issue, error) {
 const timeFormat = "2006-01-02 15:04:05"
 
 func printIssue(w io.Writer, issue *github.Issue) error {
-	if *jsonFlag {
-		showJSONIssue(w, issue)
-		return nil
-	}
 
-	fmt.Fprintf(w, "Title: %s\n", getString(issue.Title))
-	fmt.Fprintf(w, "State: %s\n", getString(issue.State))
-	fmt.Fprintf(w, "Assignee: %s\n", getUserLogin(issue.Assignee))
+	pull, _, err := client.PullRequests.Get(projectOwner, projectRepo, *issue.Number)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(w, "Title: %s\n", getString(pull.Title))
+	fmt.Fprintf(w, "State: %s\n", getString(pull.State))
+	fmt.Fprintf(w, "Assignee: %s\n", getUserLogin(pull.Assignee))
 	if issue.ClosedAt != nil {
-		fmt.Fprintf(w, "Closed: %s\n", getTime(issue.ClosedAt).Format(timeFormat))
+		fmt.Fprintf(w, "Closed: %s\n", getTime(pull.ClosedAt).Format(timeFormat))
 	}
 	fmt.Fprintf(w, "Labels: %s\n", strings.Join(getLabelNames(issue.Labels), " "))
 	fmt.Fprintf(w, "Milestone: %s\n", getMilestoneTitle(issue.Milestone))
@@ -385,7 +385,7 @@ func printIssue(w io.Writer, issue *github.Issue) error {
 	var output []string
 
 	for page := 1; ; {
-		list, resp, err := client.Issues.ListComments(projectOwner, projectRepo, getInt(issue.Number), &github.IssueListCommentsOptions{
+		list, resp, err := client.PullRequests.ListComments(projectOwner, projectRepo, getInt(issue.Number), &github.PullRequestListCommentsOptions{
 			ListOptions: github.ListOptions{
 				Page:    page,
 				PerPage: 100,
@@ -396,6 +396,14 @@ func printIssue(w io.Writer, issue *github.Issue) error {
 			w := &buf
 			fmt.Fprintf(w, "%s\n", getTime(com.CreatedAt).Format(time.RFC3339))
 			fmt.Fprintf(w, "\nComment by %s (%s)\n", getUserLogin(com.User), getTime(com.CreatedAt).Format(timeFormat))
+			if com.Path != nil {
+				pwd, err := os.Getwd()
+				if err != nil {
+					fmt.Println(err)
+					os.Exit(1)
+				}
+				fmt.Fprintf(w, "\n\t%s:%d\n\n", filepath.Join(pwd, *com.Path), *com.Position)
+			}
 			if com.Body != nil {
 				if *rawFlag {
 					fmt.Fprintf(w, "\n%s\n\n", *com.Body)
@@ -638,7 +646,7 @@ func listRepoIssues(opt github.IssueListByRepoOptions) ([]*github.Issue, error) 
 	// TODO(rsc): Rethink excluding pull requests.
 	save := all[:0]
 	for _, issue := range all {
-		if issue.PullRequestLinks == nil {
+		if issue.PullRequestLinks != nil {
 			save = append(save, issue)
 		}
 	}
