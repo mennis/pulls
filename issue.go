@@ -246,6 +246,8 @@ import (
 	"sync"
 	"time"
 
+	srcdiff "sourcegraph.com/sourcegraph/go-diff/diff"
+
 	"github.com/google/go-github/github"
 	"golang.org/x/oauth2"
 )
@@ -402,7 +404,11 @@ func printIssue(w io.Writer, issue *github.Issue) error {
 					fmt.Println(err)
 					os.Exit(1)
 				}
-				fmt.Fprintf(w, "\n\t%s:%d\n\n", filepath.Join(pwd, *com.Path), *com.Position)
+				pdiff, _ := srcdiff.ParseHunks([]byte(*com.DiffHunk))
+
+				stat := pdiff[0].Stat()
+				fmt.Fprintf(w, "\n\t%s:%d\n\n", filepath.Join(pwd, *com.Path),
+					pdiff[0].NewStartLine+pdiff[0].OrigLines+stat.Added-stat.Deleted-1)
 			}
 			if com.Body != nil {
 				if *rawFlag {
